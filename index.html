@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZenBox</title>
+    
+    <!-- PWA / Mobile Meta Tags -->
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon.svg" type="image/svg+xml">
+
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --text-color: #e2e8f0;
+            --box-color: #64748b;
+            --accent-color: #38bdf8;
+            --accent-glow: rgba(56, 189, 248, 0.4);
+            --duration: 16s; /* Total cycle time */
+        }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        .main-container {
+            position: relative;
+            width: 280px;
+            height: 280px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* BOX TRACK */
+        .box-track {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: 2px solid var(--box-color);
+            border-radius: 12px;
+            box-sizing: border-box;
+        }
+
+        /* ANIMATED DOT */
+        .box-dot {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background-color: #f0f9ff;
+            border-radius: 50%;
+            box-shadow: 
+                0 0 10px var(--accent-color),
+                0 0 20px var(--accent-color),
+                0 0 40px var(--accent-glow);
+            top: -8px;
+            left: -8px;
+            
+            /* CSS Animation */
+            animation: moveDot var(--duration) linear infinite;
+        }
+        
+        .box-dot.reset {
+            animation: none;
+        }
+
+        @keyframes moveDot {
+            /* 0% - 25%: Inhale (Up) */
+            0%   { transform: translate(0px, 280px); }   /* Bottom-Left */
+            25%  { transform: translate(0px, 0px); }     /* Top-Left */
+            
+            /* 25% - 50%: Hold (Right) */
+            50%  { transform: translate(280px, 0px); }   /* Top-Right */
+            
+            /* 50% - 75%: Exhale (Down) */
+            75%  { transform: translate(280px, 280px); } /* Bottom-Right */
+            
+            /* 75% - 100%: Hold (Left) */
+            100% { transform: translate(0px, 280px); }   /* Back to Bottom-Left */
+        }
+
+        /* TEXT ANIMATION */
+        .instruction {
+            font-size: 1.8rem;
+            font-weight: 300;
+            letter-spacing: 0.1em;
+            text-align: center;
+            z-index: 10;
+            text-transform: uppercase;
+        }
+
+        /* Use CSS pseudo-element for text to sync with CSS animation */
+        .instruction::after {
+            content: "Ready";
+            animation: changeText var(--duration) step-end infinite;
+        }
+
+        .instruction.reset::after {
+            animation: none;
+        }
+
+        @keyframes changeText {
+            0%   { content: "Inhale"; }
+            25%  { content: "Hold"; }
+            50%  { content: "Exhale"; }
+            75%  { content: "Hold"; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        <div class="box-track"></div>
+        <div class="box-dot"></div>
+
+        <div style="display: flex; flex-direction: column; align-items: center;">
+            <div class="instruction"></div>
+        </div>
+    </div>
+
+    <script>
+        // Only PWA Service Worker logic remains
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+                .then(() => console.log('Service Worker Registered'))
+                .catch(err => console.error('Service Worker Failed', err));
+        }
+
+        // Screen Wake Lock API to prevent screen from sleeping
+        let wakeLock = null;
+
+        const requestWakeLock = async () => {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('Wake Lock is active');
+                    
+                    wakeLock.addEventListener('release', () => {
+                        console.log('Screen Wake Lock released:', wakeLock.released);
+                    });
+                }
+            } catch (err) {
+                console.error(`${err.name}, ${err.message}`);
+            }
+        };
+
+        // Re-acquire lock when visibility changes (e.g. switching back to tab)
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                await requestWakeLock();
+            }
+        });
+
+        // Request lock on load
+        requestWakeLock();
+
+        document.body.addEventListener('click', () => {
+            // Ensure wake lock is active on interaction (required by some browsers)
+            requestWakeLock();
+
+            const dot = document.querySelector('.box-dot');
+            const instruction = document.querySelector('.instruction');
+
+            // Remove animation
+            dot.classList.add('reset');
+            instruction.classList.add('reset');
+
+            // Trigger reflow to restart animation
+            void dot.offsetWidth;
+
+            // Re-add animation
+            dot.classList.remove('reset');
+            instruction.classList.remove('reset');
+        });
+    </script>
+</body>
+</html>
