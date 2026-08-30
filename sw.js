@@ -1,6 +1,7 @@
-const MAIN_CACHE = 'zenbox-v6';
+const MAIN_CACHE = 'zenbox-v7';
 
 self.addEventListener("install", async (event) => {
+    self.skipWaiting();
     event.waitUntil((async () => {
         const cache = await caches.open(MAIN_CACHE)
         await cache.addAll([
@@ -24,7 +25,10 @@ const deleteOldCaches = async () => {
 };
 
 self.addEventListener("activate", (event) => {
-    event.waitUntil(deleteOldCaches());
+    event.waitUntil((async () => {
+        await deleteOldCaches();
+        await self.clients.claim();
+    })());
 });
 
 self.addEventListener('fetch', (e) => {
