@@ -415,6 +415,15 @@
             }
         };
 
+        // Let the screen sleep again once nothing is running; a finished
+        // session left on a table should not keep the display lit
+        const releaseWakeLock = async () => {
+            const lock = wakeLock;
+            wakeLock = null;
+            if (lock) await lock.release().catch(() => {});
+        };
+
+        // The page opens straight into an infinite session, so hold the screen
         requestWakeLock();
 
         // ===== Constants =====
@@ -876,6 +885,7 @@
             captionEl.textContent = CAPTION_DONE;
             updateTimerLabel();
             // The chime is already scheduled on the audio clock; nothing to do here
+            releaseWakeLock();
         }
 
         function tick() {
@@ -892,7 +902,9 @@
         // ===== Lifecycle =====
         document.addEventListener('visibilitychange', async () => {
             if (document.visibilityState !== 'visible') return;
-            if (wakeLock !== null) await requestWakeLock();
+            // The lock is dropped by the OS when we go hidden; take it back only
+            // while a session is actually running
+            if (!session.done) await requestWakeLock();
             tick();
             if (!session.done && soundEnabled) {
                 // The context may have been suspended or interrupted while hidden;
@@ -906,8 +918,8 @@
 
         // Tap anywhere: restart the session (audio, visuals and timer together)
         document.body.addEventListener('click', () => {
-            requestWakeLock();
             if (menuOpen()) { closeMenu(); return; }
+            requestWakeLock();
             startSession().catch(err => console.error('Session start failed', err));
         });
     </script>
