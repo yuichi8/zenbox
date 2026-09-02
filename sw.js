@@ -1,4 +1,4 @@
-const MAIN_CACHE = 'zenbox-v7';
+const MAIN_CACHE = 'zenbox-v9';
 
 self.addEventListener("install", async (event) => {
     self.skipWaiting();

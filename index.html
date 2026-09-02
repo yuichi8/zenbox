@@ -26,6 +26,7 @@
             --size: min(280px, 72vw);    /* Box size, drives the dot path */
             --radius: 20px;              /* Box corner radius, shared with the dot path */
             --sync-delay: 0s;            /* Negative delay used to sync visuals to audio */
+            --bar-offset: calc(28px + env(safe-area-inset-bottom));
         }
 
         * { box-sizing: border-box; }
@@ -119,6 +120,7 @@
             /* Fallback: square path via translate (corners won't hug the radius) */
             top: -7px;
             left: -7px;
+            transform: translate(0, var(--size));
             will-change: transform;
             animation: moveDot var(--duration) linear infinite;
             animation-delay: var(--sync-delay);
@@ -131,6 +133,7 @@
             .box-dot {
                 top: 0;
                 left: 0;
+                transform: none;
                 offset-rotate: 0deg;
                 animation-name: moveDotPath;
             }
@@ -211,6 +214,7 @@
             letter-spacing: 0.42em;
             text-indent: 0.42em;
             color: var(--muted-color);
+            transition: color 0.4s ease;
         }
 
         /* Reset hook: dropping the animations lets us restart them in sync */
@@ -220,12 +224,37 @@
             animation: none;
         }
 
-        /* SOUND TOGGLE */
-        .sound-toggle {
+        /* Finished state: everything settles at the starting apex */
+        .stage.done .aura,
+        .stage.done .box-dot {
+            animation: none;
+        }
+
+        .stage.done .instruction::after {
+            animation: none;
+            content: "Done";
+        }
+
+        .stage.done .caption {
+            color: var(--accent-color);
+        }
+
+        /* CONTROLS */
+        .controls {
             position: fixed;
-            bottom: calc(28px + env(safe-area-inset-bottom));
-            left: 50%;
-            transform: translateX(-50%);
+            bottom: var(--bar-offset);
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            pointer-events: none; /* only the pills catch taps */
+            z-index: 20;
+        }
+
+        .pill {
+            pointer-events: auto;
             display: flex;
             align-items: center;
             gap: 10px;
@@ -245,22 +274,82 @@
             transition: color 0.25s ease, border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
         }
 
-        .sound-toggle svg {
+        .pill svg {
             width: 16px;
             height: 16px;
             flex: none;
         }
 
-        .sound-toggle.on {
+        .pill.on {
             color: var(--accent-color);
             border-color: rgba(125, 211, 252, 0.45);
             background: rgba(125, 211, 252, 0.08);
             box-shadow: 0 0 24px rgba(125, 211, 252, 0.15);
         }
 
-        .sound-toggle:focus-visible {
+        .pill:focus-visible {
             outline: 2px solid var(--accent-color);
             outline-offset: 3px;
+        }
+
+        .timer-toggle .label {
+            min-width: 2.2em;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.08em;
+        }
+
+        /* TIMER MENU (floats above the bar) */
+        .timer-menu {
+            position: fixed;
+            bottom: calc(var(--bar-offset) + 54px);
+            left: 50%;
+            display: flex;
+            gap: 4px;
+            padding: 5px;
+            border-radius: 999px;
+            border: 1px solid var(--line-color);
+            background: rgba(10, 15, 31, 0.72);
+            -webkit-backdrop-filter: blur(14px);
+            backdrop-filter: blur(14px);
+            z-index: 21;
+            visibility: hidden;
+            opacity: 0;
+            transform: translate(-50%, 8px);
+            transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s linear 0.2s;
+        }
+
+        .timer-menu.open {
+            visibility: visible;
+            opacity: 1;
+            transform: translate(-50%, 0);
+            transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s;
+        }
+
+        .timer-menu button {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--muted-color);
+            font-family: inherit;
+            font-size: 0.72rem;
+            font-weight: 500;
+            letter-spacing: 0.04em;
+            cursor: pointer;
+            transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+        }
+
+        .timer-menu button[aria-pressed="true"] {
+            color: var(--accent-color);
+            border-color: rgba(125, 211, 252, 0.45);
+            background: rgba(125, 211, 252, 0.08);
+        }
+
+        .timer-menu button:focus-visible {
+            outline: 2px solid var(--accent-color);
+            outline-offset: 2px;
         }
 
         .hidden { display: none; }
@@ -277,23 +366,43 @@
 
         <div class="center">
             <div class="instruction"></div>
-            <div class="caption">4 &middot; 4 &middot; 4 &middot; 4</div>
+            <div class="caption" id="caption">4 &middot; 4 &middot; 4 &middot; 4</div>
         </div>
     </main>
 
-    <button class="sound-toggle" id="soundToggle" aria-pressed="false" aria-label="サウンドを有効にする">
-        <svg id="iconOff" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M11 5 6.5 9H3v6h3.5L11 19V5z"/>
-            <line x1="16" y1="9.5" x2="21" y2="14.5"/>
-            <line x1="21" y1="9.5" x2="16" y2="14.5"/>
-        </svg>
-        <svg id="iconOn" class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M11 5 6.5 9H3v6h3.5L11 19V5z"/>
-            <path d="M15.5 8.8a4.6 4.6 0 0 1 0 6.4"/>
-            <path d="M18.4 6a8.4 8.4 0 0 1 0 12"/>
-        </svg>
-        <span id="soundLabel">Sound Off</span>
-    </button>
+    <div class="timer-menu" id="timerMenu" role="group" aria-label="セッション時間">
+        <button type="button" data-min="0" aria-pressed="true" aria-label="無制限">&infin;</button>
+        <button type="button" data-min="2" aria-pressed="false" aria-label="2分">2m</button>
+        <button type="button" data-min="3" aria-pressed="false" aria-label="3分">3m</button>
+        <button type="button" data-min="5" aria-pressed="false" aria-label="5分">5m</button>
+        <button type="button" data-min="10" aria-pressed="false" aria-label="10分">10m</button>
+        <button type="button" data-min="15" aria-pressed="false" aria-label="15分">15m</button>
+    </div>
+
+    <div class="controls">
+        <button class="pill timer-toggle" id="timerToggle" aria-haspopup="true" aria-expanded="false" aria-label="セッション時間を設定する">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="13" r="8"/>
+                <path d="M12 9v4l2.6 1.6"/>
+                <path d="M9.5 3h5"/>
+            </svg>
+            <span class="label" id="timerLabel">&infin;</span>
+        </button>
+
+        <button class="pill sound-toggle" id="soundToggle" aria-pressed="false" aria-label="サウンドを有効にする">
+            <svg id="iconOff" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 5 6.5 9H3v6h3.5L11 19V5z"/>
+                <line x1="16" y1="9.5" x2="21" y2="14.5"/>
+                <line x1="21" y1="9.5" x2="16" y2="14.5"/>
+            </svg>
+            <svg id="iconOn" class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 5 6.5 9H3v6h3.5L11 19V5z"/>
+                <path d="M15.5 8.8a4.6 4.6 0 0 1 0 6.4"/>
+                <path d="M18.4 6a8.4 8.4 0 0 1 0 12"/>
+            </svg>
+            <span id="soundLabel">Sound Off</span>
+        </button>
+    </div>
 
     <script>
         // ===== PWA Service Worker =====
@@ -303,8 +412,8 @@
                 .catch(err => console.error('Service Worker Failed', err));
         }
 
-        // ===== Screen Wake Lock (keeps the screen on while watching; audio keeps
-        //       guiding even if the user locks the screen manually) =====
+        // ===== Screen Wake Lock (keeps the screen, and with it the audio
+        //       context, alive while the app is in front) =====
         let wakeLock = null;
 
         const requestWakeLock = async () => {
@@ -319,9 +428,24 @@
 
         requestWakeLock();
 
-        // ===== Visual sync =====
-        const CYCLE = 16; // seconds, must match --duration
+        // ===== Constants =====
+        const CYCLE = 16;          // seconds, must match --duration
+        const RENDER_SR = 44100;   // offline synth rate (the sound design was tuned at this rate)
+        const CAPTION_DEFAULT = '4 · 4 · 4 · 4';
+        const CAPTION_DONE = 'Tap to begin again';
+
+        // ===== Session state =====
+        // The timer runs on a wall clock. While audio is playing, the audio
+        // context clock is the master and re-anchors startedAt on every tick.
+        const session = { cycles: 0, startedAt: performance.now(), done: false }; // cycles 0 = infinite
+        let soundEnabled = false;
+
+        const sessionSeconds = () => session.cycles * CYCLE;
+        const elapsed = () => (performance.now() - session.startedAt) / 1000;
+
+        // ===== Visuals =====
         const stage = document.getElementById('stage');
+        const captionEl = document.getElementById('caption');
 
         // Rounded-rect motion path for the dot. Starts at the bottom-left corner
         // apex; each apex-to-apex segment is (side - 2r) + (PI/2)r = exactly a
@@ -352,77 +476,74 @@
         updateDotPath();
         window.addEventListener('resize', updateDotPath);
 
+        // Where the CSS animations currently are in the cycle
+        let visual = { offset: 0, at: performance.now() };
+        const visualPhase = () => (visual.offset + (performance.now() - visual.at) / 1000) % CYCLE;
+
         // Restart the CSS animations, optionally offset into the cycle
         function restartVisuals(offsetSeconds = 0) {
+            stage.classList.remove('done');
             stage.classList.add('reset');
             void stage.offsetWidth; // reflow to flush the removed animations
             document.documentElement.style.setProperty('--sync-delay', `-${offsetSeconds}s`);
             stage.classList.remove('reset');
+            visual = { offset: offsetSeconds, at: performance.now() };
         }
 
-        // ===== Sound: one 16s cycle pre-rendered to WAV, looped via <audio>.
-        //       Media-element playback keeps running under a locked screen
-        //       (and ignores the iOS silent switch), unlike live Web Audio. =====
-        const audioEl = document.createElement('audio');
-        audioEl.loop = true;
-        audioEl.setAttribute('playsinline', '');
-        document.body.appendChild(audioEl);
-
-        function encodeWav(buffer) {
-            const numCh = buffer.numberOfChannels;
-            const sr = buffer.sampleRate;
-            const len = buffer.length;
-            const bytes = 44 + len * numCh * 2;
-            const ab = new ArrayBuffer(bytes);
-            const v = new DataView(ab);
-            const writeStr = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
-            writeStr(0, 'RIFF'); v.setUint32(4, bytes - 8, true); writeStr(8, 'WAVE');
-            writeStr(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
-            v.setUint16(22, numCh, true); v.setUint32(24, sr, true);
-            v.setUint32(28, sr * numCh * 2, true); v.setUint16(32, numCh * 2, true);
-            v.setUint16(34, 16, true); writeStr(36, 'data'); v.setUint32(40, len * numCh * 2, true);
-            const chs = [];
-            for (let c = 0; c < numCh; c++) chs.push(buffer.getChannelData(c));
-            let o = 44;
-            for (let i = 0; i < len; i++) {
-                for (let c = 0; c < numCh; c++) {
-                    const s = Math.max(-1, Math.min(1, chs[c][i]));
-                    v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-                    o += 2;
-                }
-            }
-            return ab;
+        // Nudge the visuals back onto the session clock if they have drifted
+        // (background throttling, audio interruptions). Small drifts are left
+        // alone so the dot never visibly stutters.
+        function syncVisuals(force = false) {
+            if (session.done) return;
+            const target = elapsed() % CYCLE;
+            let drift = target - visualPhase();
+            drift -= CYCLE * Math.round(drift / CYCLE);
+            if (force || Math.abs(drift) > 0.1) restartVisuals(target);
         }
 
-        async function renderLoopWav() {
-            const sr = 44100;
-            const ctx = new OfflineAudioContext(2, sr * CYCLE, sr);
+        // ===== Sound: Web Audio =====
+        // One cycle (and one ending chime) is synthesised offline once, then
+        // played through a looping AudioBufferSourceNode. The loop point is
+        // sample-accurate, so there is no seam and no drift against the visuals.
+        // Trade-off vs a media element: on iOS the audio pauses when the screen
+        // locks and respects the silent switch; the wake lock keeps the screen
+        // on while the app is in front.
+        let ctx = null;
+        function ensureCtx() {
+            if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+            return ctx;
+        }
 
-            const master = ctx.createGain();
+        // Shared synth voice; renders `seconds` of stereo audio at RENDER_SR
+        async function renderBuffer(seconds, build) {
+            const sr = RENDER_SR;
+            const off = new OfflineAudioContext(2, Math.round(sr * seconds), sr);
+
+            const master = off.createGain();
             master.gain.value = 1;
-            const softener = ctx.createBiquadFilter();
+            const softener = off.createBiquadFilter();
             softener.type = 'lowpass';
             softener.frequency.value = 5200;
             master.connect(softener);
-            softener.connect(ctx.destination);
+            softener.connect(off.destination);
 
             // Soft bell: sine fundamental + quiet upper partials, slow attack, long decay
             const tone = (t, freq, { dur = 2.4, peak = 0.13, pan = 0, attack = 0.06 } = {}) => {
-                const g = ctx.createGain();
+                const g = off.createGain();
                 g.gain.setValueAtTime(0, t);
                 g.gain.linearRampToValueAtTime(peak, t + attack);
                 g.gain.exponentialRampToValueAtTime(0.0005, t + dur);
                 g.gain.linearRampToValueAtTime(0, t + dur + 0.03);
-                const p = ctx.createStereoPanner();
+                const p = off.createStereoPanner();
                 p.pan.value = pan;
                 g.connect(p);
                 p.connect(master);
                 [[freq, 1, -3], [freq * 2, 0.24, 3], [freq * 3.01, 0.05, 0]].forEach(([f, amt, det]) => {
-                    const o = ctx.createOscillator();
+                    const o = off.createOscillator();
                     o.type = 'sine';
                     o.frequency.value = f;
                     o.detune.value = det;
-                    const og = ctx.createGain();
+                    const og = off.createGain();
                     og.gain.value = amt;
                     o.connect(og);
                     og.connect(g);
@@ -432,7 +553,7 @@
             };
 
             // Breath swell: band-passed noise that rises with the inhale, falls with the exhale
-            const noiseBuf = ctx.createBuffer(1, sr * 4, sr);
+            const noiseBuf = off.createBuffer(1, sr * 4, sr);
             const nd = noiseBuf.getChannelData(0);
             let lp = 0;
             for (let i = 0; i < nd.length; i++) {
@@ -440,15 +561,15 @@
                 nd[i] = lp * 8;
             }
             const swell = (t, rising) => {
-                const src = ctx.createBufferSource();
+                const src = off.createBufferSource();
                 src.buffer = noiseBuf;
                 src.loop = true;
-                const f = ctx.createBiquadFilter();
+                const f = off.createBiquadFilter();
                 f.type = 'bandpass';
                 f.Q.value = 0.7;
                 f.frequency.setValueAtTime(rising ? 240 : 820, t);
                 f.frequency.exponentialRampToValueAtTime(rising ? 820 : 240, t + 4);
-                const g = ctx.createGain();
+                const g = off.createGain();
                 g.gain.setValueAtTime(0, t);
                 g.gain.linearRampToValueAtTime(0.05, t + (rising ? 2.9 : 1.1));
                 g.gain.linearRampToValueAtTime(0, t + 4.15);
@@ -459,8 +580,14 @@
                 src.stop(t + 4.2);
             };
 
-            // Cues on an E-pentatonic palette:
-            // inhale = rising pair, exhale = falling pair, both holds = same single tone
+            build({ tone, swell });
+            return off.startRendering();
+        }
+
+        // Cues on an E-pentatonic palette:
+        // inhale = rising pair, exhale = falling pair, both holds = same single tone.
+        // The last tone dies out by 14.1s, so the loop point sits in silence.
+        const renderCycle = () => renderBuffer(CYCLE, ({ tone, swell }) => {
             tone(0.00,  329.63, { peak: 0.13, pan: -0.15 }); // E4
             tone(0.22,  493.88, { peak: 0.11, pan:  0.15 }); // B4  (rising)
             tone(4.00,  415.30, { peak: 0.10, dur: 2.0 });   // G#4 (hold)
@@ -469,20 +596,75 @@
             tone(12.00, 415.30, { peak: 0.10, dur: 2.0 });   // G#4 (hold)
             swell(0, true);
             swell(8, false);
+        });
 
-            const rendered = await ctx.startRendering();
-            return new Blob([encodeWav(rendered)], { type: 'audio/wav' });
-        }
+        // Ending chime: a slow descending E-major arpeggio that settles on E4
+        const renderChime = () => renderBuffer(7, ({ tone }) => {
+            tone(0.0, 659.25, { peak: 0.10, pan: -0.10, dur: 3.5 });  // E5
+            tone(0.5, 493.88, { peak: 0.10, pan:  0.10, dur: 4.0 });  // B4
+            tone(1.0, 329.63, { peak: 0.12, dur: 5.5, attack: 0.1 }); // E4
+        });
 
-        let loopUrlPromise = null;
-        function getLoopUrl() {
-            if (!loopUrlPromise) {
-                loopUrlPromise = renderLoopWav().then(blob => URL.createObjectURL(blob));
-            }
-            return loopUrlPromise;
-        }
+        let cycleBufPromise = null;
+        let chimeBufPromise = null;
+        const getCycleBuf = () => cycleBufPromise || (cycleBufPromise = renderCycle());
+        const getChimeBuf = () => chimeBufPromise || (chimeBufPromise = renderChime());
         // Pre-render in the background so the first toggle responds instantly
-        setTimeout(getLoopUrl, 500);
+        setTimeout(() => { getCycleBuf(); getChimeBuf(); }, 500);
+
+        // Currently sounding graph. t0 is the context time of session second 0,
+        // so `ctx.currentTime - t0` is the audio clock's view of elapsed().
+        let playing = null; // { master, loopSrc, chimeSrc, t0 }
+        const audioElapsed = () => (playing ? ctx.currentTime - playing.t0 : null);
+
+        // Start (or re-seek) playback at a given point of the session
+        async function startAudio(atSeconds) {
+            const ac = ensureCtx();
+            if (ac.state !== 'running') await ac.resume();
+            const [cycle, chime] = await Promise.all([getCycleBuf(), getChimeBuf()]);
+            stopAudio(0.05);
+
+            const now = ac.currentTime + 0.03;
+            const t0 = now - atSeconds;
+            const master = ac.createGain();
+            master.gain.value = 1;
+            master.connect(ac.destination);
+
+            const loopSrc = ac.createBufferSource();
+            loopSrc.buffer = cycle;
+            loopSrc.loop = true;
+            loopSrc.connect(master);
+            loopSrc.start(now, atSeconds % CYCLE);
+
+            let chimeSrc = null;
+            if (session.cycles) {
+                // Timed session: the loop ends exactly on the last cycle boundary
+                // and the chime takes over at that same sample
+                const tEnd = Math.max(now, t0 + sessionSeconds());
+                loopSrc.stop(tEnd);
+                chimeSrc = ac.createBufferSource();
+                chimeSrc.buffer = chime;
+                chimeSrc.connect(master);
+                chimeSrc.start(tEnd);
+            }
+
+            playing = { master, loopSrc, chimeSrc, t0 };
+        }
+
+        // Fade out and release whatever is sounding
+        function stopAudio(fade = 0.15) {
+            if (!playing) return;
+            const { master, loopSrc, chimeSrc } = playing;
+            playing = null;
+            const now = ctx.currentTime;
+            master.gain.setValueAtTime(master.gain.value, now);
+            master.gain.linearRampToValueAtTime(0, now + fade);
+            for (const src of [loopSrc, chimeSrc]) {
+                if (!src) continue;
+                try { src.stop(now + fade + 0.02); } catch (_) { /* already stopped */ }
+            }
+            setTimeout(() => master.disconnect(), (fade + 0.1) * 1000);
+        }
 
         // ===== Sound toggle (default: OFF) =====
         const toggleBtn = document.getElementById('soundToggle');
@@ -491,69 +673,144 @@
         const soundLabel = document.getElementById('soundLabel');
 
         function updateToggleUI() {
-            const on = !audioEl.paused;
+            const on = soundEnabled;
             toggleBtn.classList.toggle('on', on);
             toggleBtn.setAttribute('aria-pressed', String(on));
             toggleBtn.setAttribute('aria-label', on ? 'サウンドを無効にする' : 'サウンドを有効にする');
             iconOn.classList.toggle('hidden', !on);
             iconOff.classList.toggle('hidden', on);
             soundLabel.textContent = on ? 'Sound On' : 'Sound Off';
-            if ('mediaSession' in navigator) {
-                navigator.mediaSession.playbackState = on ? 'playing' : 'paused';
-            }
         }
 
+        // Joins the running session in sync rather than restarting it
         async function enableSound() {
-            if (!audioEl.src) audioEl.src = await getLoopUrl();
-            audioEl.currentTime = 0;
-            await audioEl.play();
-            restartVisuals(0);
+            soundEnabled = true;
+            updateToggleUI();
+            if (!session.done) await startAudio(elapsed());
         }
 
         function disableSound() {
-            audioEl.pause();
+            soundEnabled = false;
+            stopAudio();
+            updateToggleUI();
         }
 
         toggleBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
+            closeMenu();
             try {
-                if (audioEl.paused) {
-                    await enableSound();
-                } else {
+                if (soundEnabled) {
                     disableSound();
+                } else {
+                    await enableSound();
                 }
             } catch (err) {
                 console.error('Sound toggle failed', err);
+                disableSound();
             }
         });
 
-        audioEl.addEventListener('play', updateToggleUI);
-        audioEl.addEventListener('pause', updateToggleUI);
+        // ===== Timer =====
+        const timerToggle = document.getElementById('timerToggle');
+        const timerLabel = document.getElementById('timerLabel');
+        const timerMenu = document.getElementById('timerMenu');
+        const timerOptions = Array.from(timerMenu.querySelectorAll('button'));
 
-        // Lock-screen media controls
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.metadata = new MediaMetadata({
-                title: 'Box Breathing 4-4-4-4',
-                artist: 'ZenBox',
-                artwork: [{ src: 'icon.svg', sizes: 'any', type: 'image/svg+xml' }]
-            });
-            navigator.mediaSession.setActionHandler('play', () => { enableSound().catch(() => {}); });
-            navigator.mediaSession.setActionHandler('pause', disableSound);
+        function formatRemaining() {
+            const remain = Math.max(0, Math.ceil(sessionSeconds() - elapsed()));
+            const m = Math.floor(remain / 60);
+            const s = String(remain % 60).padStart(2, '0');
+            return `${m}:${s}`;
         }
+
+        function updateTimerLabel() {
+            timerLabel.textContent = session.cycles ? formatRemaining() : '∞';
+        }
+
+        function openMenu() {
+            timerMenu.classList.add('open');
+            timerToggle.setAttribute('aria-expanded', 'true');
+        }
+
+        function closeMenu() {
+            timerMenu.classList.remove('open');
+            timerToggle.setAttribute('aria-expanded', 'false');
+        }
+
+        const menuOpen = () => timerMenu.classList.contains('open');
+
+        timerToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            menuOpen() ? closeMenu() : openMenu();
+        });
+
+        timerMenu.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const btn = e.target.closest('button[data-min]');
+            if (!btn) return;
+            const minutes = Number(btn.dataset.min);
+            // Whole cycles only, rounded up, so a session always ends on the
+            // exhale-hold at the starting apex
+            session.cycles = minutes ? Math.ceil(minutes * 60 / CYCLE) : 0;
+            timerOptions.forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+            closeMenu();
+            startSession().catch(err => console.error('Session start failed', err));
+        });
+
+        // ===== Session control =====
+        async function startSession() {
+            session.startedAt = performance.now();
+            session.done = false;
+            captionEl.textContent = CAPTION_DEFAULT;
+            restartVisuals(0);
+            updateTimerLabel();
+            if (soundEnabled) {
+                await startAudio(0);
+            } else {
+                stopAudio();
+            }
+        }
+
+        function finishSession() {
+            if (session.done) return;
+            session.done = true;
+            stage.classList.add('done');
+            captionEl.textContent = CAPTION_DONE;
+            updateTimerLabel();
+            // The chime is already scheduled on the audio clock; nothing to do here
+        }
+
+        function tick() {
+            if (!session.done && playing && ctx.state === 'running') {
+                // Audio clock is the master while it runs
+                session.startedAt = performance.now() - audioElapsed() * 1000;
+                syncVisuals();
+            }
+            if (!session.done && session.cycles && elapsed() >= sessionSeconds()) finishSession();
+            updateTimerLabel();
+        }
+        setInterval(tick, 250);
 
         // ===== Lifecycle =====
         document.addEventListener('visibilitychange', async () => {
             if (document.visibilityState !== 'visible') return;
             if (wakeLock !== null) await requestWakeLock();
-            // CSS animations throttle in the background; snap them back to the audio clock
-            if (!audioEl.paused) restartVisuals(audioEl.currentTime % CYCLE);
+            tick();
+            if (!session.done && soundEnabled) {
+                // The context may have been suspended or interrupted while hidden;
+                // rejoin at the wall-clock position (may be refused without a gesture)
+                const stale = !playing || ctx.state !== 'running' || Math.abs(audioElapsed() - elapsed()) > 0.5;
+                if (stale) startAudio(elapsed()).catch(() => {});
+            }
+            // CSS animations throttle in the background; snap them back to the clock
+            syncVisuals(true);
         });
 
-        // Tap anywhere: restart the cycle (audio and visuals together)
+        // Tap anywhere: restart the session (audio, visuals and timer together)
         document.body.addEventListener('click', () => {
             requestWakeLock();
-            if (!audioEl.paused) audioEl.currentTime = 0;
-            restartVisuals(0);
+            if (menuOpen()) { closeMenu(); return; }
+            startSession().catch(err => console.error('Session start failed', err));
         });
     </script>
 </body>
