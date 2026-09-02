@@ -549,13 +549,10 @@
         // Signal path: voices -> master -> [dry + convolution reverb] -> softener.
         // `wrap`: an extra REVERB_TAIL seconds are rendered and folded back onto
         //   the start, so the loop point carries the tail instead of a cut.
-        // `preroll`: that many seconds are rendered and discarded first, so
-        //   filters and the reverb are in steady state at sample 0. Used for the
-        //   periodic drone layer, whose loop must be continuous to the sample.
         const REVERB_TAIL = 3.0;
-        async function renderBuffer(seconds, build, { wrap = false, preroll = 0 } = {}) {
+        async function renderBuffer(seconds, build, { wrap = false } = {}) {
             const sr = RENDER_SR;
-            const total = preroll + seconds + (wrap ? REVERB_TAIL : 0);
+            const total = seconds + (wrap ? REVERB_TAIL : 0);
             const off = new OfflineAudioContext(2, Math.round(sr * total), sr);
 
             const master = off.createGain();
@@ -599,7 +596,6 @@
 
             // Soft bell: sine fundamental + quiet upper partials, slow attack, long decay
             const tone = (t, freq, { dur = 2.4, peak = 0.13, pan = 0, attack = 0.06 } = {}) => {
-                t += preroll;
                 const g = off.createGain();
                 g.gain.setValueAtTime(0, t);
                 g.gain.linearRampToValueAtTime(peak, t + attack);
@@ -632,7 +628,6 @@
                 nd[i] = lp * 8;
             }
             const swell = (t, rising) => {
-                t += preroll;
                 const src = off.createBufferSource();
                 src.buffer = noiseBuf;
                 src.loop = true;
@@ -652,72 +647,48 @@
                 src.stop(t + 4.2);
             };
 
-            // Drone bed: a quiet E pad that never lets the mix fall to digital
-            // silence. Every frequency is a multiple of 1/CYCLE Hz (within a cent
-            // of pitch), so the bed is exactly periodic over one loop and the two
-            // E3 partials beat once per cycle, giving slow natural movement.
-            const drone = (level = 0.014) => {
-                const bus = off.createGain();
-                bus.gain.value = level;
-                const warm = off.createBiquadFilter();
-                warm.type = 'lowpass';
-                warm.frequency.value = 420;
-                bus.connect(warm);
-                warm.connect(master);
-                const step = 1 / CYCLE;
-                [[1318, 1.0, -0.2], [1976, 0.55, 0.2], [2636, 0.45, -0.35], [2637, 0.45, 0.35]]
-                    .forEach(([k, amt, pan]) => {   // E2, B2, E3, E3(+6.6 cents)
-                        const o = off.createOscillator();
-                        o.type = 'sine';
-                        o.frequency.value = k * step;
-                        const g = off.createGain();
-                        g.gain.value = amt;
-                        const p = off.createStereoPanner();
-                        p.pan.value = pan;
-                        o.connect(g);
-                        g.connect(p);
-                        p.connect(bus);
-                        o.start(0);
-                    });
-            };
-
-            build({ tone, swell, drone });
+            build({ tone, swell });
             const full = await off.startRendering();
-            if (!wrap && !preroll) return full;
+            if (!wrap) return full;
 
-            // Drop the preroll; fold the tail back onto the head so the loop is seamless
-            const skip = Math.round(sr * preroll);
+            // Fold the tail back onto the head so the loop is seamless
             const len = Math.round(sr * seconds);
             const out = off.createBuffer(2, len, sr);
             for (let ch = 0; ch < 2; ch++) {
                 const src = full.getChannelData(ch);
                 const dst = out.getChannelData(ch);
-                dst.set(src.subarray(skip, skip + len));
-                for (let i = skip + len; i < src.length; i++) dst[i - skip - len] += src[i];
+                dst.set(src.subarray(0, len));
+                for (let i = len; i < src.length; i++) dst[i - len] += src[i];
             }
             return out;
         }
 
-        // Sum equal-length buffers into the first one
-        function mixInto(base, ...layers) {
-            for (const layer of layers) {
-                for (let ch = 0; ch < base.numberOfChannels; ch++) {
-                    const d = base.getChannelData(ch);
-                    const l = layer.getChannelData(ch);
-                    for (let i = 0; i < d.length; i++) d[i] += l[i];
+        // Scale a buffer so its peak sits at TARGET_PEAK (-6 dBFS). The synth
+        // is voiced for balance, not level; without this the mix peaked around
+        // -14 dBFS, which is nearly inaudible on phone speakers (Android especially).
+        const TARGET_PEAK = 0.5;
+        function normalize(buf) {
+            let peak = 0;
+            for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+                const d = buf.getChannelData(ch);
+                for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); if (a > peak) peak = a; }
+            }
+            if (peak > 0) {
+                const k = TARGET_PEAK / peak;
+                for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+                    const d = buf.getChannelData(ch);
+                    for (let i = 0; i < d.length; i++) d[i] *= k;
                 }
             }
-            return base;
+            return buf;
         }
 
-        // Cues on an E-pentatonic palette over a quiet drone:
+        // Cues on an E-pentatonic palette:
         // inhale = rising pair, inhale-hold = G#4, exhale = falling pair,
         // exhale-hold = B3 (lower, so the two holds are distinguishable by ear).
-        // The cues are rendered with a folded reverb tail; the drone is rendered
-        // separately after a preroll (steady-state filters, exactly periodic),
-        // so neither layer has a discontinuity at the loop point.
-        const renderCycle = async () => mixInto(...await Promise.all([
-            renderBuffer(CYCLE, ({ tone, swell }) => {
+        // The last tone dies out by ~14.1s and the reverb tail is folded onto
+        // the head, so the loop point carries no discontinuity.
+        const renderCycle = async () => normalize(await renderBuffer(CYCLE, ({ tone, swell }) => {
             tone(0.00,  329.63, { peak: 0.13, pan: -0.15, attack: 0.18 }); // E4
             tone(0.35,  493.88, { peak: 0.10, pan:  0.15, attack: 0.25 }); // B4  (rising)
             tone(4.00,  415.30, { peak: 0.10, dur: 2.2, attack: 0.15 });   // G#4 (inhale hold)
@@ -726,16 +697,14 @@
             tone(12.00, 246.94, { peak: 0.11, dur: 2.2, attack: 0.15 });   // B3  (exhale hold)
             swell(0, true);
             swell(8, false);
-            }, { wrap: true }),
-            renderBuffer(CYCLE, ({ drone }) => drone(), { preroll: 4 }),
-        ]));
+        }, { wrap: true }));
 
         // Ending chime: a slow descending E-major arpeggio that settles on E4
-        const renderChime = () => renderBuffer(7, ({ tone }) => {
+        const renderChime = async () => normalize(await renderBuffer(7, ({ tone }) => {
             tone(0.0, 659.25, { peak: 0.10, pan: -0.10, dur: 3.5, attack: 0.12 });  // E5
             tone(0.5, 493.88, { peak: 0.10, pan:  0.10, dur: 4.0, attack: 0.12 });  // B4
             tone(1.0, 329.63, { peak: 0.12, dur: 5.5, attack: 0.15 });              // E4
-        });
+        }));
 
         let cycleBufPromise = null;
         let chimeBufPromise = null;
@@ -758,7 +727,7 @@
 
             const now = ac.currentTime + 0.03;
             const t0 = now - atSeconds;
-            // The loop is never silent (drone bed), so every start is a fade-in
+            // Fade in so a mid-session re-seek never lands on a hard edge
             const master = ac.createGain();
             master.gain.setValueAtTime(0, now);
             master.gain.linearRampToValueAtTime(1, now + 0.25);
@@ -775,7 +744,7 @@
             let chimeSrc = null;
             if (session.cycles) {
                 // Timed session: the chime starts exactly on the last cycle
-                // boundary while the loop (drone included) fades out under it
+                // boundary while the loop fades out under it
                 const tEnd = Math.max(now, t0 + sessionSeconds());
                 const LOOP_FADE = 2.5;
                 loopGain.gain.setValueAtTime(1, tEnd);
