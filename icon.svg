@@ -1,26 +1,36 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <!-- Modern Vibrant Gradient -->
-    <linearGradient id="neonGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#22d3ee;stop-opacity:1" /> <!-- Cyan -->
-      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" /> <!-- Blue -->
+    <!-- Background: deep navy with a soft light from above, matching the app -->
+    <radialGradient id="bg" cx="50%" cy="-10%" r="110%">
+      <stop offset="0%" stop-color="#1a2a52"/>
+      <stop offset="55%" stop-color="#0a0f1f"/>
+    </radialGradient>
+
+    <!-- Track: bright near the dot, fading away along the path -->
+    <linearGradient id="track" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#7dd3fc" stop-opacity="1"/>
+      <stop offset="45%"  stop-color="#7dd3fc" stop-opacity="0.34"/>
+      <stop offset="100%" stop-color="#7dd3fc" stop-opacity="0.16"/>
     </linearGradient>
-    
-    <!-- Soft Glow Filter -->
-    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="16" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+
+    <!-- Dot: white core with a sky-blue rim -->
+    <radialGradient id="dot" cx="38%" cy="36%" r="70%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#bae6fd"/>
+    </radialGradient>
+
+    <filter id="glow" x="-200%" y="-200%" width="500%" height="500%">
+      <feGaussianBlur stdDeviation="22"/>
     </filter>
   </defs>
 
-  <rect width="512" height="512" fill="#0f172a"/>
+  <rect width="512" height="512" fill="url(#bg)"/>
 
-  <!-- The "Box" Path: Thick gradient stroke, rounded corners -->
-  <rect x="106" y="106" width="300" height="300" rx="60" 
-        fill="none" 
-        stroke="url(#neonGrad)" 
-        stroke-width="56"
-        stroke-linecap="round"
-        filter="url(#glow)"
-  />
+  <!-- Breathing track (rounded square, kept inside the maskable safe zone) -->
+  <rect x="128" y="128" width="256" height="256" rx="72"
+        fill="none" stroke="url(#track)" stroke-width="18"/>
+
+  <!-- Glowing dot at the top-right corner apex of the track -->
+  <circle cx="363" cy="149" r="34" fill="#7dd3fc" opacity="0.55" filter="url(#glow)"/>
+  <circle cx="363" cy="149" r="22" fill="url(#dot)"/>
 </svg>
