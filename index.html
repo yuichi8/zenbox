@@ -218,14 +218,27 @@
             animation: none;
         }
 
-        /* Finished state: everything settles at the starting apex */
-        .stage.done .box-dot {
+        /* Finished / paused: everything settles at the starting apex, so a
+           resume always begins on an inhale */
+        .stage.done .box-dot,
+        .stage.paused .box-dot,
+        .stage.ready .box-dot {
             animation: none;
         }
 
         .stage.done .instruction::after {
             animation: none;
             content: "Done";
+        }
+
+        .stage.paused .instruction::after {
+            animation: none;
+            content: "Paused";
+        }
+
+        .stage.ready .instruction::after {
+            animation: none;
+            content: "Ready";
         }
 
         .stage.done .caption {
@@ -348,7 +361,7 @@
 
     <header class="wordmark">ZENBOX</header>
 
-    <main class="stage" id="stage">
+    <main class="stage ready" id="stage">
         <div class="aura"></div>
         <div class="box-track"></div>
         <div class="box-dot"></div>
@@ -423,23 +436,31 @@
             if (lock) await lock.release().catch(() => {});
         };
 
-        // The page opens straight into an infinite session, so hold the screen
-        requestWakeLock();
 
         // ===== Constants =====
         const CYCLE = 16;          // seconds, must match --duration
         const RENDER_SR = 44100;   // offline synth rate (the sound design was tuned at this rate)
         const CAPTION_DEFAULT = '4 · 4 · 4 · 4';
         const CAPTION_DONE = 'Tap to begin again';
+        const CAPTION_PAUSED = 'Tap to resume';
+        const CAPTION_READY = 'Tap to begin';
 
         // ===== Session state =====
         // The timer runs on a wall clock. While audio is playing, the audio
         // context clock is the master and re-anchors startedAt on every tick.
-        const session = { cycles: 0, startedAt: performance.now(), done: false }; // cycles 0 = infinite
+        // pausedAt: elapsed seconds frozen while paused (null = running). It is
+        // always a whole number of cycles: a breath cannot be resumed halfway,
+        // so a pause discards the partial cycle and resumes on the next inhale.
+        // The app opens in the ready state (paused at 0): the first inhale is
+        // the user's tap, not the page load.
+        const session = { cycles: 0, startedAt: performance.now(), done: false, pausedAt: 0 }; // cycles 0 = infinite
         let soundEnabled = false;
 
         const sessionSeconds = () => session.cycles * CYCLE;
-        const elapsed = () => (performance.now() - session.startedAt) / 1000;
+        const elapsed = () => session.pausedAt !== null
+            ? session.pausedAt
+            : (performance.now() - session.startedAt) / 1000;
+        const running = () => !session.done && session.pausedAt === null;
 
         // ===== Visuals =====
         const stage = document.getElementById('stage');
@@ -480,7 +501,7 @@
 
         // Restart the CSS animations, optionally offset into the cycle
         function restartVisuals(offsetSeconds = 0) {
-            stage.classList.remove('done');
+            stage.classList.remove('done', 'paused', 'ready');
             stage.classList.add('reset');
             void stage.offsetWidth; // reflow to flush the removed animations
             document.documentElement.style.setProperty('--sync-delay', `-${offsetSeconds}s`);
@@ -492,7 +513,7 @@
         // (background throttling, audio interruptions). Small drifts are left
         // alone so the dot never visibly stutters.
         function syncVisuals(force = false) {
-            if (session.done) return;
+            if (!running()) return;
             const target = elapsed() % CYCLE;
             let drift = target - visualPhase();
             drift -= CYCLE * Math.round(drift / CYCLE);
@@ -789,11 +810,13 @@
             soundLabel.textContent = on ? 'Sound On' : 'Sound Off';
         }
 
-        // Joins the running session in sync rather than restarting it
+        // Joins a running session in sync rather than restarting it. While
+        // ready or paused nothing plays; the tap that starts the session will
+        // start the audio with it.
         async function enableSound() {
             soundEnabled = true;
             updateToggleUI();
-            if (!session.done) await startAudio(elapsed());
+            if (running()) await startAudio(elapsed());
         }
 
         function disableSound() {
@@ -861,13 +884,14 @@
             session.cycles = minutes ? Math.ceil(minutes * 60 / CYCLE) : 0;
             timerOptions.forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
             closeMenu();
-            startSession().catch(err => console.error('Session start failed', err));
+            readySession();
         });
 
         // ===== Session control =====
         async function startSession() {
             session.startedAt = performance.now();
             session.done = false;
+            session.pausedAt = null;
             captionEl.textContent = CAPTION_DEFAULT;
             restartVisuals(0);
             updateTimerLabel();
@@ -888,25 +912,66 @@
             releaseWakeLock();
         }
 
+        // Pause: keep the completed cycles, drop the partial one, and let the
+        // screen sleep. Visuals settle at the starting apex.
+        function pauseSession() {
+            if (!running()) return;
+            session.pausedAt = Math.floor(elapsed() / CYCLE) * CYCLE;
+            stopAudio();
+            stage.classList.add('paused');
+            captionEl.textContent = CAPTION_PAUSED;
+            updateTimerLabel();
+            releaseWakeLock();
+        }
+
+        // Ready: a fresh session armed at the starting apex, waiting for the
+        // user's tap. Used at load and after picking a duration.
+        function readySession() {
+            session.done = false;
+            session.pausedAt = 0;
+            stopAudio();
+            stage.classList.remove('done', 'paused');
+            stage.classList.add('ready');
+            captionEl.textContent = CAPTION_READY;
+            updateTimerLabel();
+            releaseWakeLock();
+        }
+
+        // Resume on a fresh inhale at the cycle boundary we paused on
+        async function resumeSession() {
+            const at = session.pausedAt;
+            if (at === null) return;
+            session.pausedAt = null;
+            session.startedAt = performance.now() - at * 1000;
+            captionEl.textContent = CAPTION_DEFAULT;
+            restartVisuals(0);
+            updateTimerLabel();
+            if (soundEnabled) await startAudio(at);
+        }
+
         function tick() {
-            if (!session.done && playing && ctx.state === 'running') {
+            if (!running()) { updateTimerLabel(); return; }
+            if (playing && ctx.state === 'running') {
                 // Audio clock is the master while it runs
                 session.startedAt = performance.now() - audioElapsed() * 1000;
                 syncVisuals();
             }
-            if (!session.done && session.cycles && elapsed() >= sessionSeconds()) finishSession();
+            if (session.cycles && elapsed() >= sessionSeconds()) finishSession();
             updateTimerLabel();
         }
         setInterval(tick, 250);
+
+        readySession();
 
         // ===== Lifecycle =====
         document.addEventListener('visibilitychange', async () => {
             if (document.visibilityState !== 'visible') return;
             // The lock is dropped by the OS when we go hidden; take it back only
             // while a session is actually running
-            if (!session.done) await requestWakeLock();
+            if (!running()) return; // paused or done: nothing to rejoin
+            await requestWakeLock();
             tick();
-            if (!session.done && soundEnabled) {
+            if (soundEnabled) {
                 // The context may have been suspended or interrupted while hidden;
                 // rejoin at the wall-clock position (may be refused without a gesture)
                 const stale = !playing || ctx.state !== 'running' || Math.abs(audioElapsed() - elapsed()) > 0.5;
@@ -916,11 +981,19 @@
             syncVisuals(true);
         });
 
-        // Tap anywhere: restart the session (audio, visuals and timer together)
+        // Tap anywhere: pause a running session, resume a paused one, and
+        // start over once a session has finished
         document.body.addEventListener('click', () => {
             if (menuOpen()) { closeMenu(); return; }
-            requestWakeLock();
-            startSession().catch(err => console.error('Session start failed', err));
+            if (session.done) {
+                requestWakeLock();
+                startSession().catch(err => console.error('Session start failed', err));
+            } else if (session.pausedAt !== null) {
+                requestWakeLock();
+                resumeSession().catch(err => console.error('Resume failed', err));
+            } else {
+                pauseSession();
+            }
         });
     </script>
 </body>
