@@ -1,4 +1,4 @@
-const MAIN_CACHE = 'zenbox-v21';
+const MAIN_CACHE = 'zenbox-v22';
 
 self.addEventListener("install", async (event) => {
     self.skipWaiting();
@@ -8,6 +8,9 @@ self.addEventListener("install", async (event) => {
             './',
             './index.html',
             './icon.svg',
+            './icon-mono.svg',
+            './favicon.svg',
+            './favicon.ico',
             './icon-192.png',
             './icon-512.png',
             './apple-touch-icon.png',

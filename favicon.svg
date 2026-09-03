@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    Favicon: the same mark on a rounded tile, cropped tighter than the app
+    icon so it still reads at 16 px. Stroke and margins are multiples of
+    32 units, i.e. whole pixels at 16 px (2 px stroke) and 32 px (4 px).
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#172447"/>
+      <stop offset="1" stop-color="#0a0f1f"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <path d="M 416 244.6 V 320 A 96 96 0 0 1 320 416 H 192 A 96 96 0 0 1 96 320 V 192 A 96 96 0 0 1 192 96 H 267.4"
+        fill="none" stroke="#7dd3fc" stroke-width="64" stroke-linecap="round"/>
+  <circle cx="387.9" cy="124.1" r="64" fill="#ffffff"/>
+</svg>
