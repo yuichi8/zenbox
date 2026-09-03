@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    Full-bleed variant for launchers that apply their own mask (manifest
+    purpose "maskable", and the iOS apple-touch-icon). Same mark and
+    geometry as icon.svg; the mark stays inside the maskable safe zone
+    (r = 204.8 from centre). Do not add rounded corners here.
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#172447"/>
+      <stop offset="1" stop-color="#0a0f1f"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <path d="M 384 243.5 V 312 A 72 72 0 0 1 312 384 H 200 A 72 72 0 0 1 128 312 V 200 A 72 72 0 0 1 200 128 H 268.5"
+        fill="none" stroke="#7dd3fc" stroke-width="48" stroke-linecap="round"/>
+  <circle cx="362.9" cy="149.1" r="52" fill="#ffffff"/>
+</svg>

@@ -1,10 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <!--
-    ZenBox app icon.
+    ZenBox app icon (manifest purpose "any": splash screen, desktop
+    install dialog, taskbar - places that show the file unmasked, hence
+    the rounded tile with transparent corners).
     The mark is the breathing box itself: a rounded-square track whose
     fourth corner is replaced by the dot that travels around it. One
     stroke weight, one dot, no glow: it survives 16 px and monochrome.
-    Everything sits inside the maskable safe zone (r = 204.8 from centre).
+    icon-maskable.svg is the full-bleed twin for launchers that mask.
   -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
@@ -12,7 +14,7 @@
       <stop offset="1" stop-color="#0a0f1f"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
   <!-- Track: three rounded corners, open at the top-right -->
   <path d="M 384 243.5 V 312 A 72 72 0 0 1 312 384 H 200 A 72 72 0 0 1 128 312 V 200 A 72 72 0 0 1 200 128 H 268.5"
         fill="none" stroke="#7dd3fc" stroke-width="48" stroke-linecap="round"/>
