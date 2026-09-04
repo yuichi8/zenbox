@@ -469,6 +469,12 @@
         const session = { cycles: 0, startedAt: performance.now(), done: false, pausedAt: 0 }; // cycles 0 = infinite
         let soundEnabled = false;
 
+        // ===== Preferences (localStorage; may throw in private mode) =====
+        const PREF_SOUND = 'zenbox.sound';
+        const PREF_MINUTES = 'zenbox.minutes';
+        const loadPref = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+        const savePref = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+
         const sessionSeconds = () => session.cycles * CYCLE;
         const elapsed = () => session.pausedAt !== null
             ? session.pausedAt
@@ -805,12 +811,14 @@
         // start the audio with it.
         async function enableSound() {
             soundEnabled = true;
+            savePref(PREF_SOUND, '1');
             updateToggleUI();
             if (running()) await startAudio(elapsed());
         }
 
         function disableSound() {
             soundEnabled = false;
+            savePref(PREF_SOUND, '0');
             stopAudio();
             updateToggleUI();
         }
@@ -868,14 +876,19 @@
             e.stopPropagation();
             const btn = e.target.closest('button[data-min]');
             if (!btn) return;
+            selectTimer(btn);
+            savePref(PREF_MINUTES, btn.dataset.min);
+            closeMenu();
+            readySession();
+        });
+
+        function selectTimer(btn) {
             const minutes = Number(btn.dataset.min);
             // Whole cycles only, rounded up, so a session always ends on the
             // exhale-hold at the starting apex
             session.cycles = minutes ? Math.ceil(minutes * 60 / CYCLE) : 0;
             timerOptions.forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
-            closeMenu();
-            readySession();
-        });
+        }
 
         // ===== Session control =====
         async function startSession() {
@@ -950,6 +963,17 @@
             updateTimerLabel();
         }
         setInterval(tick, 250);
+
+        // Restore preferences. The sound flag is only the user's intent: the
+        // AudioContext can't start without a gesture, so the tap that starts
+        // the session brings the audio up (startSession checks soundEnabled).
+        const savedMin = loadPref(PREF_MINUTES);
+        const savedBtn = savedMin !== null && timerOptions.find(b => b.dataset.min === savedMin);
+        if (savedBtn) selectTimer(savedBtn);
+        if (loadPref(PREF_SOUND) === '1') {
+            soundEnabled = true;
+            updateToggleUI();
+        }
 
         readySession();
 
