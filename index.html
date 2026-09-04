@@ -595,8 +595,15 @@
             verbTone.connect(wet);
             wet.connect(softener);
 
-            // Soft bell: sine fundamental + quiet upper partials, slow attack, long decay
-            const tone = (t, freq, { dur = 2.4, peak = 0.13, pan = 0, attack = 0.06 } = {}) => {
+            // Soft bell: sine fundamental + quiet upper partials, slow attack, long decay.
+            // `partials` = [[multiple, amplitude, detune cents], ...] relative to `freq`.
+            const BELL = [[1, 1, -3], [2, 0.24, 3], [3.01, 0.05, 0]];
+            // Phone speakers roll off steeply below ~500 Hz, so a note whose fundamental
+            // sits down there all but vanishes on them. This voicing keeps the same pitch
+            // (the ear infers it from the harmonic series) but moves the audible energy
+            // into the 2nd-4th partials, where the speaker can actually reproduce it.
+            const LOW_BELL = [[1, 1, -3], [2, 0.55, 3], [3.01, 0.12, 0], [4, 0.20, -2]];
+            const tone = (t, freq, { dur = 2.4, peak = 0.13, pan = 0, attack = 0.06, partials = BELL } = {}) => {
                 const g = off.createGain();
                 g.gain.setValueAtTime(0, t);
                 g.gain.linearRampToValueAtTime(peak, t + attack);
@@ -606,10 +613,10 @@
                 p.pan.value = pan;
                 g.connect(p);
                 p.connect(master);
-                [[freq, 1, -3], [freq * 2, 0.24, 3], [freq * 3.01, 0.05, 0]].forEach(([f, amt, det]) => {
+                partials.forEach(([mult, amt, det]) => {
                     const o = off.createOscillator();
                     o.type = 'sine';
-                    o.frequency.value = f;
+                    o.frequency.value = freq * mult;
                     o.detune.value = det;
                     const og = off.createGain();
                     og.gain.value = amt;
@@ -648,7 +655,7 @@
                 src.stop(t + 4.2);
             };
 
-            build({ tone, swell });
+            build({ tone, swell, LOW_BELL });
             const full = await off.startRendering();
             if (!wrap) return full;
 
@@ -686,16 +693,17 @@
 
         // Cues on an E-pentatonic palette:
         // inhale = rising pair, inhale-hold = G#4, exhale = falling pair,
-        // exhale-hold = B3 (lower, so the two holds are distinguishable by ear).
+        // exhale-hold = B3 (lower, so the two holds are distinguishable by ear;
+        // voiced with LOW_BELL so it stays audible on phone speakers).
         // The last tone dies out by ~14.1s and the reverb tail is folded onto
         // the head, so the loop point carries no discontinuity.
-        const renderCycle = async () => normalize(await renderBuffer(CYCLE, ({ tone, swell }) => {
+        const renderCycle = async () => normalize(await renderBuffer(CYCLE, ({ tone, swell, LOW_BELL }) => {
             tone(0.00,  329.63, { peak: 0.13, pan: -0.15, attack: 0.18 }); // E4
             tone(0.35,  493.88, { peak: 0.10, pan:  0.15, attack: 0.25 }); // B4  (rising)
             tone(4.00,  415.30, { peak: 0.10, dur: 2.2, attack: 0.15 });   // G#4 (inhale hold)
             tone(8.00,  493.88, { peak: 0.13, pan:  0.15, attack: 0.18 }); // B4
             tone(8.35,  329.63, { peak: 0.10, pan: -0.15, attack: 0.25 }); // E4  (falling)
-            tone(12.00, 246.94, { peak: 0.11, dur: 2.2, attack: 0.15 });   // B3  (exhale hold)
+            tone(12.00, 246.94, { peak: 0.11, dur: 2.2, attack: 0.15, partials: LOW_BELL }); // B3 (exhale hold)
             swell(0, true);
             swell(8, false);
         }, { wrap: true }));
